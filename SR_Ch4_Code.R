@@ -484,7 +484,7 @@ plot(height ~ weight, data = d)
 
 # linear model probably won't cut it, quadratic it is
 # we want to use weight to predict expected height 
-
+library(rethinking)
 # translating the model framework and trying to use this for prediction
 d$weight.sq <- (d$weight)^2
 
@@ -556,4 +556,232 @@ precis(h1_pred)
 # starting with our array of weights 
 
 weights <- c(46.95, 43.72, 64.78, 32.59, 54.63)
+
+# maybe we can write a for loop to generate these values but in a standardized vector 
+
+??HPDI
+
+# trying to extract samples 
+post <- extract.samples(h1_pred)
+
+post[1:5,]
+
+# we want to make predictions for the weights vector 
+
+mu <- link(h1_pred, data=data.frame(weight=weights))
+weights.seq <- seq(weights)
+
+mu <- link(h1_pred, data=data.frame(weight=weights))
+
+?link
+
+mu <- link(h1_pred, data=d)
+
+head(d)
+str(d)
+
+data.frame(weight=weights)
+
+h1_pred
+
+weights_std <- weights
+(weights_std_sq <- (weights)^2)
+
+data.frame(weights_std, weights_std_sq)
+
+46.95^2
+
+mu <- link(h1_pred, data=data.frame(weights_std, weights_std_sq))
+
+# probably want a basic equation but want the weights to be only that given vector 
+
+h1_pred
+
+d
+weights
+weights_sq <- (weights)^2
+weights_sq
+
+d_pred <- data.frame(weights, weights_sq)
+head(d_pred)
+
+32.59^2
+
+mu <- link(h1_pred, data=d_pred)
+
+# trying to make a different version to match the column names 
+h1_pred
+h1.2 <- map(
+  alist(
+    height ~ dnorm(mu, sigma) , 
+    mu ~ a + b1*weights + b2*weights_sq , 
+    a ~ dnorm(150, 50) , 
+    b1 ~ dnorm(0, 10) , 
+    b2 ~ dnorm(0, 10) , 
+    sigma ~ dunif(0, 50)
+  ), data=d
+)
+
+mu <- link(h1.2, data=d_pred)
+
+str(mu)
+
+# this seems to work, now onto plotting 
+
+for (i in 1:100)
+  points(weights, mu[i,], pch=16, col=col.alpha(rangi2, 0.1))
+
+weights
+
+# visually this seems to be right, let's see if we can get some tables 
+
+# trying to simulate heights 
+
+sim.height_test <- sim(h1.2, data=list(weights=weights))
+str(sim.height_test)
+
+height.PI_test <- apply(sim.height_test, 2, PI, prob=0.89)
+
+height.PI_test
+
+weights
+
+# trying another plot 
+plot(height ~ weight, d, col=col.alpha(rangi2, 0.5))
+
+# MAP line 
+mu.mean_test <- apply(mu, 2, mean)
+
+lines(weights, mu.mean_test)
+shade(height.PI_test, weights)
+
+#hmm....
+
+# trying 4H2
+
+head(Howell1)
+
+# ensuring we only get the adults 
+
+d2_adults <- Howell1[Howell1$age >= 18,]
+
+str(d2_adults)
+d2_adults
+
+str(Howell1)
+fivenum(d2_adults$age)
+
+# fit a linear regression to these data 
+# want to make a new model predicting height 
+
+d2_children <- Howell1[Howell1$age <= 18,]
+str(d2_children)
+
+fivenum(d2_children$age)
+
+h1.3 <- map(
+  alist(
+    height ~ dnorm(mu, sigma) , 
+    mu ~ a + b*weight , 
+    a ~ dnorm(125, 50) , 
+    b ~ dnorm(0, 10) , 
+    sigma ~ dunif(0, 50)
+  ), data=d2_children
+)
+
+precis(h1.3)
+
+# now plotting on top of this 
+
+plot(height ~ weight, data=d2_children)
+
+fivenum(d2_children$weight)
+
+plot(height ~ weight, data=Howell1)
+
+# imposing the MAP regression line and the 89% HPDI intervals 
+
+mu <- link(h1.3, data=d2_children)
+
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+
+str(mu.mean)
+mu.PI
+precis(h1.3)
+
+# coming up with our own weight.seq
+fivenum(d2_children$weight)
+
+weight_seq_child <- seq(from=3, to=60, by=1)
+
+mu <- link(h1.3, data=data.frame(weight=weight_seq_child))
+
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+
+lines(weight_seq_child, mu.mean)
+shade(mu.PI, weight_seq_child)
+
+# now to simulate the heights 
+sim.height_child <- sim(h1.3, data=list(weight=weight_seq_child))
+
+height.PI <- apply(sim.height_child, 2, PI, prob=0.89)
+
+shade(height.PI, weight_seq_child)
+
+# looks great! 
+
+# now trying the final example, with the logarithm of body weight scaling with height 
+
+?log
+
+# building the model with log-scaling and map 
+
+h1.4log <- map(
+  alist(
+    height ~ dnorm(mu, sigma) , 
+    mu ~ a + b*log(weight) , 
+    a ~ dnorm(178, 100) , 
+    b ~ dnorm(0, 100) , 
+    sigma ~ dunif(0, 50)
+  ), data = Howell1
+)
+
+precis(h1.4log)
+
+# now doing some plotting
+
+plot(height ~ weight, data=Howell1 , col=col.alpha(rangi2, 0.4))
+
+fivenum(Howell1$weight)
+
+# getting the weight sequence 
+weight.seq <- seq(from=3, to=70, by=1)
+
+mu <- link(h1.4log, data=data.frame(weight=weight.seq))
+
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+
+lines(weight.seq, mu.mean)
+shade(mu.PI, weight.seq)
+
+# oh wow this looks promising 
+
+# now to do the prediction interval 
+
+sim_height_log <- sim(h1.4log, data=list(weight=weight.seq))
+height.PI <- apply(sim_height_log, 2, PI, prob=0.89)
+
+shade(height.PI, weight.seq)
+
+# very nice!
+
+# changing to the 97 HPDI per the question 
+mu.PI.97 <- apply(mu, 2, PI, prob=0.97)
+height.PI.97 <- apply(sim_height_log, 2, PI, prob=0.97)
+
+shade(mu.PI.97, weight.seq)
+shade(height.PI.97, weight.seq)
 
